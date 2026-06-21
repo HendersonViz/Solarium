@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Solarium</title>
+    <style>
+      html, body { margin: 0; padding: 0; overflow: hidden; background: #000; }
+      #scene { display: block; width: 100vw; height: 100vh; }
+
+      #hud {
+        position: fixed; left: 12px; bottom: 12px; z-index: 10;
+        font: 12px/1.4 ui-monospace, Menlo, Consolas, monospace;
+        color: #6ab7ff; background: rgba(0,0,0,0.45);
+        padding: 6px 10px; border-radius: 6px; pointer-events: none;
+        opacity: 0.85;
+      }
+
+      /* Floating planet labels, projected from 3D each frame. */
+      #labels {
+        position: fixed; inset: 0; pointer-events: none; z-index: 5;
+        overflow: hidden;
+      }
+      .planet-label {
+        position: absolute; top: 0; left: 0;
+        font: 600 11px/1 ui-monospace, Menlo, Consolas, monospace;
+        letter-spacing: 0.5px; text-transform: uppercase;
+        text-shadow: 0 0 6px rgba(0,0,0,0.9), 0 0 2px rgba(0,0,0,1);
+        white-space: nowrap; opacity: 0.9; will-change: transform;
+      }
+
+      /* Side panel: planet selector + Wikipedia extract. */
+      #panel {
+        position: fixed; top: 12px; right: 12px; z-index: 20;
+        width: 340px; max-width: 90vw; max-height: calc(100vh - 24px);
+        display: flex; flex-direction: column;
+        background: linear-gradient(180deg, rgba(10,14,28,0.92), rgba(6,8,18,0.94));
+        border: 1px solid rgba(102, 232, 255, 0.25);
+        border-radius: 10px; color: #d6e8ff;
+        font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        box-shadow: 0 8px 40px rgba(0,0,0,0.6), 0 0 30px rgba(102,232,255,0.08);
+        backdrop-filter: blur(6px);
+        transform: translateX(360px); opacity: 0; pointer-events: none;
+        transition: transform 220ms ease, opacity 220ms ease;
+        overflow: hidden;
+      }
+      #panel.open { transform: translateX(0); opacity: 1; pointer-events: auto; }
+
+      #panel-head {
+        display: flex; align-items: baseline; justify-content: space-between;
+        padding: 10px 14px 6px; border-bottom: 1px solid rgba(102,232,255,0.15);
+      }
+      #panel-title {
+        font-weight: 700; font-size: 18px; letter-spacing: 0.3px;
+        color: #6ab7ff; margin: 0;
+      }
+      #panel-close {
+        background: none; border: none; color: #6ab7ff; cursor: pointer;
+        font-size: 16px; line-height: 1; padding: 2px 6px; border-radius: 4px;
+      }
+      #panel-close:hover { background: rgba(106,183,255,0.15); }
+
+      #panel-list {
+        display: flex; flex-wrap: wrap; gap: 6px;
+        padding: 10px 12px; border-bottom: 1px solid rgba(102,232,255,0.1);
+      }
+      .planet-btn {
+        appearance: none; cursor: pointer;
+        font: 600 11px/1 ui-monospace, Menlo, Consolas, monospace;
+        text-transform: uppercase; letter-spacing: 0.4px;
+        padding: 5px 9px; border-radius: 999px;
+        color: #cfe3ff; background: rgba(255,255,255,0.04);
+        border: 1px solid color-mix(in srgb, var(--planet-color, #6ab7ff) 60%, transparent);
+        box-shadow: 0 0 8px color-mix(in srgb, var(--planet-color, #6ab7ff) 25%, transparent);
+        transition: background 120ms, transform 120ms;
+      }
+      .planet-btn:hover { background: rgba(255,255,255,0.1); transform: translateY(-1px); }
+      .planet-btn.active {
+        background: var(--planet-color, #6ab7ff);
+        color: #05060a; border-color: var(--planet-color, #6ab7ff);
+        box-shadow: 0 0 18px var(--planet-color, #6ab7ff);
+      }
+
+      #panel-article {
+        overflow-y: auto; padding: 12px 14px; flex: 1; min-height: 0;
+      }
+      .wiki-thumb {
+        width: 100%; max-height: 180px; object-fit: cover; border-radius: 6px;
+        margin-bottom: 10px; display: block;
+        border: 1px solid rgba(102,232,255,0.15);
+      }
+      .wiki-extract { margin: 0 0 12px; color: #d6e8ff; line-height: 1.6; }
+      .wiki-link {
+        display: inline-block; color: #6ab7ff; text-decoration: none;
+        font-size: 12px; font-weight: 600; padding-top: 6px;
+        border-top: 1px solid rgba(102,232,255,0.15); margin-top: 4px;
+      }
+      .wiki-link:hover { text-decoration: underline; }
+      .wiki-loading { color: #6ab7ff; font-style: italic; opacity: 0.8; }
+      .wiki-error { color: #ff9a9a; }
+
+      /* Scrollbar inside the panel. */
+      #panel-article::-webkit-scrollbar { width: 8px; }
+      #panel-article::-webkit-scrollbar-thumb {
+        background: rgba(106,183,255,0.3); border-radius: 4px;
+      }
+
+      /* Easter-egg / ARG mode for the comet. Warmer tint, monospace,
+         a blinking cursor — explicitly not Wikipedia. */
+      #panel.arg-mode {
+        border-color: rgba(255, 150, 90, 0.35);
+        box-shadow: 0 8px 40px rgba(0,0,0,0.6), 0 0 30px rgba(255,150,90,0.12);
+      }
+      #panel.arg-mode #panel-title {
+        color: #ffb088; letter-spacing: 4px;
+        animation: arg-flicker 3.5s infinite steps(60);
+      }
+      #panel.arg-mode #panel-list { display: none; } /* no planet buttons in ARG mode */
+
+      .arg-fragment {
+        margin: 0 0 14px;
+        font: 13px/1.7 ui-monospace, Menlo, Consolas, monospace;
+        color: #ffd9b3;
+        text-shadow: 0 0 8px rgba(255,150,80,0.25);
+      }
+      .arg-meta {
+        font: 11px/1 ui-monospace, monospace;
+        color: #ff9a55; opacity: 0.75; margin-bottom: 14px;
+        letter-spacing: 1px;
+      }
+      .arg-cursor {
+        display: inline-block; width: 9px; height: 14px;
+        background: #ffb088; vertical-align: text-bottom;
+        animation: arg-blink 1s steps(2) infinite;
+        box-shadow: 0 0 6px rgba(255,150,80,0.5);
+      }
+      @keyframes arg-blink { 50% { opacity: 0; } }
+      @keyframes arg-flicker {
+        0%, 92%, 100% { opacity: 1; }
+        93%, 96% { opacity: 0.4; }
+        94% { opacity: 0.9; }
+      }
+    </style>
+    <script type="module" crossorigin src="/assets/index-BWPqkxR_.js"></script>
+  </head>
+  <body>
+    <canvas id="scene"></canvas>
+    <div id="labels"></div>
+    <div id="hud">scroll: zoom · drag: orbit · click planet: snap + read · click the comet: ???</div>
+    <aside id="panel" aria-label="Planet info">
+      <div id="panel-head">
+        <h2 id="panel-title">Solarium</h2>
+        <button id="panel-close" aria-label="Close panel">×</button>
+      </div>
+      <div id="panel-list"></div>
+      <div id="panel-article"></div>
+    </aside>
+  </body>
+</html>
