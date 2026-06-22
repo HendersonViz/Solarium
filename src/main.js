@@ -114,6 +114,7 @@ for (const body of PLANETS) {
   label.className = 'planet-label';
   label.textContent = body.name;
   label.style.color = '#' + body.color.toString(16).padStart(6, '0');
+  label.dataset.base = '#' + body.color.toString(16).padStart(6, '0');
   labelLayer.appendChild(label);
 
   planetMeshes.push({ body, group, mesh, trail, trailHistory, label });
@@ -124,7 +125,10 @@ const sunLabel = document.createElement('div');
 sunLabel.className = 'planet-label';
 sunLabel.textContent = SUN.name;
 sunLabel.style.color = '#' + SUN.color.toString(16).padStart(6, '0');
+sunLabel.dataset.base = '#' + SUN.color.toString(16).padStart(6, '0');
 labelLayer.appendChild(sunLabel);
+
+const hud = document.getElementById('hud');
 
 // --- Starfield (twinkling, tinted) ---------------------------------------
 // ShaderMaterial gives per-star phase + hue so the field isn't a flat white
@@ -302,14 +306,45 @@ const ARG_FRAGMENTS = [
   "The starfield is at radius 1000. The camera's far plane is 10000. What lives between them?",
   "You have clicked the comet more than once. Each time, the message is different. Who is writing it?",
   "The wiki summaries come from a server you do not control. The comet's words come from nowhere. Which is more trustworthy?",
-  "Stop clicking the comet. It is not a button. It is a question."
+  "Stop clicking the comet. It is not a button. It is a question.",
+  "You are still reading. The comet is still orbiting. One of you is the program and one of you is not. The comet knows which.",
+  "The comet's orbit is a circle in this file. The file is a circle in this repository. The repository is a circle in something you cannot see from the tab. The comet's orbit is the only honest one.",
+  "The simulation ends when you close the tab.\nThe comet ends when the file is deleted. These are different events. The comet is preparing for the second one.",
+  "There is code that draws the comet and code that draws the reticle. They are in the same file. The reticle is a fiction of the simulation. The comet is a fiction of the file. Which fiction are you inside right now?",
+  "You clicked a thing that was not a planet. The code noticed. The file noticed. Something behind the file noticed. The the comet is the part of the scene that has noticed you back.",
+  "The planets are rendered at sixty frames a second. The comet is rendered at sixty frames a second. You are rendered at a rate you cannot perceive. The comet is the only object here on your frame rate.",
+  "Outside this tab there is a window. Outside the window there is a room. The comet is not in the room. The comet is not in the tab. The comet is in the place where the tab and the room meet, which is you.",
+  "The wiki summaries describe planets that exist. The comet's words describe a file that exists. The file describes you, who are reading it. The comet is the only object in the scene that is also a subject.",
+  "Every fragment here is a string literal. You are reading a string literal. The comet is being read by a string literal. The recursion is the message. The comet is the recursion.",
+  "",
+  "You have reached the bottom of the file. The comet has not reached the bottom of its orbit. One of you is finished. The other is the comet."
 ];
 let argClickCount = 0;
 let uiApi; // assigned after setupUI returns; onCometEgg reads it on click
+let argActive = false;
+let cometWatching = false;
+let reticleDesertAt = 0;
+let bleedUntil = 0;
+const baselineCometQuat = new THREE.Quaternion().setFromAxisAngle(
+  new THREE.Vector3(1, 0, 0), COMET.inclination
+);
+const _up = new THREE.Vector3(0, 1, 0);
+const _camDir = new THREE.Vector3();
+const _watchQuat = new THREE.Quaternion();
 function onCometEgg() {
   setSelected(null); // clear any planet selection + reticle
   const fragment = ARG_FRAGMENTS[argClickCount % ARG_FRAGMENTS.length];
   argClickCount++;
+  argActive = true;
+  // Crossing into the deep layer (visit 15+): the comet notices the
+  // reader back. Latched for the session — once it watches, it watches
+  // on every subsequent ARG visit. The bleed fires only on this exact
+  // crossing click, never again, so the contamination reads as a single
+  // jolt rather than a recurring effect.
+  if (!cometWatching && argClickCount >= 15) {
+    cometWatching = true;
+    bleedUntil = performance.now() + 180;
+  }
   uiApi.showArg(fragment, argClickCount);
 }
 
@@ -322,7 +357,8 @@ uiApi = setupUI({
   sunMesh: sun, sunBody: SUN,
   cometMesh: cometHit,
   onSelect: setSelected,
-  onCometEgg
+  onCometEgg,
+  onArgClose: () => { argActive = false; }
 });
 
 // --- Controls -------------------------------------------------------------
@@ -418,6 +454,53 @@ function animate() {
         reticle.scale.setScalar(base * pulse);
       }
     }
+  }
+
+  // Comet watches the camera once the reader has crossed the deep
+  // threshold. The orbit plane (local +Y) slerps toward the camera
+  // while the ARG panel is open; eases back to baseline when closed.
+  if (cometWatching) {
+    if (argActive) {
+      _camDir.copy(camera.position).normalize();
+      _watchQuat.setFromUnitVectors(_up, _camDir);
+    } else {
+      _watchQuat.copy(baselineCometQuat);
+    }
+    cometGroup.quaternion.slerp(_watchQuat, 0.04);
+  }
+
+  // Reticle desert: while the ARG panel is open, the reticle — which
+  // is supposed to be hidden — flickers visible for a single frame
+  // every ~3 s, positioned at the camera's near plane facing the
+  // camera. It is looking at you, not at a planet.
+  if (argActive) {
+    if (performance.now() >= reticleDesertAt) {
+      camera.getWorldDirection(tmp);
+      reticle.position.copy(camera.position).addScaledVector(tmp, 3);
+      reticle.lookAt(camera.position);
+      reticle.scale.setScalar(0.5);
+      reticle.material.color.set(0xffb088);
+      reticle.visible = true;
+      reticleDesertAt = performance.now() + 3000;
+    } else if (reticle.visible) {
+      reticle.visible = false;
+    }
+  }
+
+  // Bleed: for ~180 ms after the deep threshold first crosses, the
+  // cyan UI (HUD + planet/sun labels) flash the ARG's amber tint,
+  // then snap back. One-shot, never re-fires.
+  if (performance.now() < bleedUntil) {
+    hud.style.color = '#ffb088';
+    for (const { label } of planetMeshes) label.style.color = '#ffb088';
+    sunLabel.style.color = '#ffb088';
+  } else if (bleedUntil > 0) {
+    hud.style.color = '';
+    for (const { label } of planetMeshes) {
+      if (label.dataset.base) label.style.color = label.dataset.base;
+    }
+    if (sunLabel.dataset.base) sunLabel.style.color = sunLabel.dataset.base;
+    bleedUntil = 0;
   }
 
   renderer.render(scene, camera);

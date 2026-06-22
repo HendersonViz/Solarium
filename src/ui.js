@@ -22,7 +22,7 @@ export async function fetchWikiExtract(title) {
   };
 }
 
-export function setupUI({ camera, canvas, planetMeshes, sunMesh, sunBody, cometMesh, onSelect, onCometEgg }) {
+export function setupUI({ camera, canvas, planetMeshes, sunMesh, sunBody, cometMesh, onSelect, onCometEgg, onArgClose }) {
   // --- Build panel DOM (skeleton styled via index.html) -------------------
   const panel = document.getElementById('panel');
   const panelList = document.getElementById('panel-list');
@@ -124,9 +124,11 @@ export function setupUI({ camera, canvas, planetMeshes, sunMesh, sunBody, cometM
   }
 
   function closePanel() {
+    const wasArg = panel.classList.contains('arg-mode');
     panel.classList.remove('open', 'arg-mode');
     for (const b of buttons.values()) b.classList.remove('active');
     activeBody = null;
+    if (wasArg && onArgClose) onArgClose();
   }
 
   function renderArticle(body, info) {
@@ -165,10 +167,13 @@ export function setupUI({ camera, canvas, planetMeshes, sunMesh, sunBody, cometM
     panelTitle.style.color = '';
     for (const b of buttons.values()) b.classList.remove('active');
     const counter = clickCount > 1 ? `<div class="arg-meta">visit #${clickCount}</div>` : '';
+    // Deep layer (visit 15+): the cursor stops blinking and creeps
+    // leftward across the text, as if reading along with the reader.
+    const cursorCls = clickCount >= 15 ? 'arg-cursor-deep' : 'arg-cursor';
     panelArticle.innerHTML = `
       <p class="arg-fragment">${escapeHtml(fragment)}</p>
       ${counter}
-      <div class="arg-cursor"></div>
+      <div class="${cursorCls}"></div>
     `;
   }
 

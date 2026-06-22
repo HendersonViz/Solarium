@@ -122,6 +122,7 @@
         font: 13px/1.7 ui-monospace, Menlo, Consolas, monospace;
         color: #ffd9b3;
         text-shadow: 0 0 8px rgba(255,150,80,0.25);
+        white-space: pre-wrap;
       }
       .arg-meta {
         font: 11px/1 ui-monospace, monospace;
@@ -134,19 +135,29 @@
         animation: arg-blink 1s steps(2) infinite;
         box-shadow: 0 0 6px rgba(255,150,80,0.5);
       }
+      .arg-cursor-deep {
+        display: inline-block; width: 9px; height: 14px;
+        background: #ffb088; vertical-align: text-bottom;
+        animation: arg-creep 4s steps(32) infinite;
+        box-shadow: 0 0 6px rgba(255,150,80,0.5);
+      }
       @keyframes arg-blink { 50% { opacity: 0; } }
+      @keyframes arg-creep {
+        0%   { transform: translateX(0); }
+        100% { transform: translateX(-32px); }
+      }
       @keyframes arg-flicker {
         0%, 92%, 100% { opacity: 1; }
         93%, 96% { opacity: 0.4; }
         94% { opacity: 0.9; }
       }
     </style>
-    <script type="module" crossorigin src="/assets/index-BWPqkxR_.js"></script>
+    <script type="module" crossorigin src="/assets/index-B5zs-_pt.js"></script>
   </head>
   <body>
     <canvas id="scene"></canvas>
     <div id="labels"></div>
-    <div id="hud">scroll: zoom · drag: orbit · click planet: snap + read · click the comet: ???</div>
+    <div id="hud">scroll: zoom · drag: orbit · click planet: snap + read</div>
     <aside id="panel" aria-label="Planet info">
       <div id="panel-head">
         <h2 id="panel-title">Solarium</h2>
