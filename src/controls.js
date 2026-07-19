@@ -19,7 +19,10 @@ export function makeControls(camera, domElement) {
     minPhi: 0.15,
     maxPhi: Math.PI - 0.15,
     target: new THREE.Vector3(0, 0, 0),
-    flying: false
+    flying: false,
+    // Set by every input handler; main.js uses it to start the idle
+    // "breathing" drift only after the user has left the camera alone.
+    lastInputAt: performance.now()
   };
 
   let dragging = false;
@@ -75,6 +78,7 @@ export function makeControls(camera, domElement) {
   function onWheel(e) {
     e.preventDefault();
     cancelFly();
+    state.lastInputAt = performance.now();
     const factor = Math.exp(e.deltaY * 0.0012);
     state.radius = Math.min(state.maxRadius, Math.max(state.minRadius, state.radius * factor));
     apply();
@@ -82,6 +86,7 @@ export function makeControls(camera, domElement) {
 
   function onDown(e) {
     cancelFly();
+    state.lastInputAt = performance.now();
     dragging = true;
     lastX = e.clientX;
     lastY = e.clientY;
@@ -90,6 +95,7 @@ export function makeControls(camera, domElement) {
 
   function onMove(e) {
     if (!dragging) return;
+    state.lastInputAt = performance.now();
     const dx = e.clientX - lastX;
     const dy = e.clientY - lastY;
     lastX = e.clientX;

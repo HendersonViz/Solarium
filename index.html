@@ -29,6 +29,17 @@
         white-space: nowrap; opacity: 0.9; will-change: transform;
       }
 
+      /* Atmosphere overlays: sit above the 3D canvas + labels (z 5) but
+         below the HUD (10) and panel (20) so UI text stays crisp. */
+      #vignette {
+        position: fixed; inset: 0; z-index: 6; pointer-events: none;
+        background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.5) 100%);
+      }
+      #grain {
+        position: fixed; inset: 0; width: 100vw; height: 100vh;
+        z-index: 7; pointer-events: none; opacity: 0.05;
+      }
+
       /* Side panel: planet selector + Wikipedia extract. */
       #panel {
         position: fixed; top: 12px; right: 12px; z-index: 20;
@@ -156,7 +167,9 @@
   <body>
     <canvas id="scene"></canvas>
     <div id="labels"></div>
-    <div id="hud">scroll: zoom · drag: orbit · click planet: snap + read</div>
+    <div id="vignette"></div>
+    <canvas id="grain"></canvas>
+    <div id="hud">scroll: zoom · drag: orbit · click planet: snap + read<span id="hud-dist"></span></div>
     <aside id="panel" aria-label="Planet info">
       <div id="panel-head">
         <h2 id="panel-title">Solarium</h2>

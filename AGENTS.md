@@ -28,6 +28,9 @@ Single-page app, no router, no framework. Entry is `index.html` → `src/main.js
 - `src/main.js` — scene/camera/renderer setup, sun + planets + starfield,
   animation loop. Time is anchored via `t0 = Date.now()` captured once at
   load; `t = (Date.now() - t0) / 1000` advances at real speed.
+- `src/atmosphere.js` — film grain on the `#grain` overlay canvas (the
+  `#vignette` overlay is pure CSS). Both sit at z-index 6–7, above the
+  label layer (5) but below the HUD (10) and panel (20).
 
 ## Conventions & gotchas
 - `"type": "module"` in `package.json` — all JS uses ESM (`import`/`export`).

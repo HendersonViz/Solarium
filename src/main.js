@@ -3,6 +3,7 @@ import { SUN, PLANETS } from './bodies.js';
 import { makeOrbitLine, positionAt } from './orbit.js';
 import { makeControls } from './controls.js';
 import { setupUI } from './ui.js';
+import { setupAtmosphere } from './atmosphere.js';
 
 const canvas = document.getElementById('scene');
 
@@ -129,6 +130,12 @@ sunLabel.dataset.base = '#' + SUN.color.toString(16).padStart(6, '0');
 labelLayer.appendChild(sunLabel);
 
 const hud = document.getElementById('hud');
+const hudDist = document.getElementById('hud-dist');
+
+// Film grain on the #grain overlay canvas (vignette is pure CSS).
+setupAtmosphere(document.getElementById('grain'));
+
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // --- Starfield (twinkling, tinted) ---------------------------------------
 // ShaderMaterial gives per-star phase + hue so the field isn't a flat white
@@ -379,6 +386,7 @@ const t0 = Date.now();
 const tmp = new THREE.Vector3();
 const screen = new THREE.Vector3();
 const labelOffset = new THREE.Vector3();
+let hudDistAt = 0;
 
 function pushTrail(history, geom, pos, point) {
   history.push(point.x, point.y, point.z);
@@ -432,6 +440,29 @@ function animate() {
     controls.setTarget(tmp);
   }
   controls.apply();
+
+  // Camera breathing: after ~4 s without input, drift the camera with
+  // three slow incommensurate sines. Amplitude scales with radius so it
+  // stays subtle when zoomed in on a planet. Applied after apply() and
+  // before the reticle logic below so everything reads the same frame's
+  // camera position.
+  if (!reduceMotion && !controls.state.flying) {
+    const idle = (performance.now() - controls.state.lastInputAt) / 1000;
+    if (idle > 4) {
+      const amp = controls.state.radius * 0.0012;
+      const bt = performance.now() / 1000;
+      camera.position.x += amp * Math.sin(bt * (Math.PI * 2 / 27));
+      camera.position.y += amp * 0.6 * Math.sin(bt * (Math.PI * 2 / 41) + 1.7);
+      camera.position.z += amp * Math.sin(bt * (Math.PI * 2 / 53) + 3.1);
+      camera.lookAt(controls.state.target);
+    }
+  }
+
+  // HUD distance readout, throttled to ~5 Hz to avoid layout churn.
+  if (performance.now() >= hudDistAt) {
+    hudDist.textContent = ' · r = ' + controls.state.radius.toFixed(1);
+    hudDistAt = performance.now() + 200;
+  }
 
   // Reticle follows the selected body and faces the camera.
   if (selectedBody) {
